@@ -1,20 +1,18 @@
-import { useEffect, useRef } from 'react';
-import * as d3 from 'd3';
+import { useEffect, useRef } from "react";
+import * as d3 from "d3";
 
-// Define TypeScript interfaces for nodes and links
+// Define Node and Link Types
 interface Node {
   id: string;
-  x?: number; // Optional, as d3 will add these dynamically
-  y?: number; // Optional, as d3 will add these dynamically
-  vx?: number; // Velocity in x direction
-  vy?: number; // Velocity in y direction
-  fx?: number | null; // Fixed x position
-  fy?: number | null; // Fixed y position
+  x?: number;
+  y?: number;
+  fx?: number | null;
+  fy?: number | null;
 }
 
 interface Link {
-  source: string | Node; // Can be a string (id) or a Node object
-  target: string | Node; // Can be a string (id) or a Node object
+  source: string | Node;
+  target: string | Node;
 }
 
 interface GraphViewProps {
@@ -28,73 +26,80 @@ function GraphView({ nodes, links }: GraphViewProps) {
   const height = 600;
 
   useEffect(() => {
-    d3.select(svgRef.current).selectAll("*").remove(); // Clear previous SVG content
+    const svg = d3.select(svgRef.current);
+    svg.selectAll("*").remove(); // Clear previous elements
 
-    if (!nodes || !links) return;
+    if (!nodes.length || !links.length) return;
 
-    // Select the SVG element and set up the viewBox
-    const svg = d3.select(svgRef.current)
+    // Create container group
+    const container = svg
       .attr("viewBox", [0, 0, width, height])
-      .append("g");
+      .append("g")
+      .attr("class", "graph-container");
 
-    // Create links (lines)
-    const link = svg.append("g")
+    // Add links (edges)
+    const linkSelection = container
+      .append("g")
+      .attr("stroke", "#aaa")
+      .attr("stroke-opacity", 0.7)
       .selectAll("line")
       .data(links)
-      .enter()
-      .append("line")
-      .attr("stroke", "#999")
-      .attr("stroke-opacity", 0.6);
+      .join("line");
 
-    // Create nodes (circles)
-    const node = svg.append("g")
+    // Add nodes (circles)
+    const nodeSelection = container
+      .append("g")
       .selectAll("circle")
       .data(nodes)
-      .enter()
-      .append("circle")
-      .attr("r", 8)
+      .join("circle")
+      .attr("r", 10)
       .attr("fill", "#69b3a2")
       .call(
-        d3.drag<SVGCircleElement, Node>() // Add drag behavior
-          .on("start", (event, d) => {
-            if (!event.active) simulation.alphaTarget(0.3).restart(); // Restart simulation
-            d.fx = d.x; // Fix x position
-            d.fy = d.y; // Fix y position
+        d3.drag<SVGCircleElement, Node>()
+          .on("start", function (event, d) {
+            const node = d as Node; // Explicitly cast d to Node
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            node.fx = node.x;
+            node.fy = node.y;
           })
-          .on("drag", (event, d) => {
-            d.fx = event.x; // Update fixed x position
-            d.fy = event.y; // Update fixed y position
+          .on("drag", function (event, d) {
+            const node = d as Node;
+            node.fx = event.x;
+            node.fy = event.y;
           })
-          .on("end", (event, d) => {
-            if (!event.active) simulation.alphaTarget(0); // Stop simulation
-            d.fx = null; // Release fixed x position
-            d.fy = null; // Release fixed y position
-          })
+          .on("end", function (event, d) {
+            const node = d as Node;
+            if (!event.active) simulation.alphaTarget(0);
+            node.fx = null;
+            node.fy = null;
+          }) as unknown as (selection: d3.Selection<d3.BaseType, Node, SVGGElement, unknown>) => void
       );
 
-    // Set up the simulation
-    const simulation = d3.forceSimulation<Node>(nodes)
+
+    // Create force simulation
+    const simulation = d3
+      .forceSimulation(nodes)
       .force(
         "link",
-        d3.forceLink<Node, Link>(links)
+        d3
+          .forceLink<Node, Link>(links)
           .id((d) => d.id)
-          .distance(50)
+          .distance(80)
       )
-      .force("charge", d3.forceManyBody().strength(-200))
+      .force("charge", d3.forceManyBody().strength(-250))
       .force("center", d3.forceCenter(width / 2, height / 2))
       .on("tick", () => {
-        link
-          .attr("x1", (d) => (typeof d.source === "object" && d.source.x !== undefined ? d.source.x : 0))
-          .attr("y1", (d) => (typeof d.source === "object" && d.source.y !== undefined ? d.source.y : 0))
-          .attr("x2", (d) => (typeof d.target === "object" && d.target.x !== undefined ? d.target.x : 0))
-          .attr("y2", (d) => (typeof d.target === "object" && d.target.y !== undefined ? d.target.y : 0));
+        linkSelection
+          .attr("x1", (d) => (d.source as Node).x || 0)
+          .attr("y1", (d) => (d.source as Node).y || 0)
+          .attr("x2", (d) => (d.target as Node).x || 0)
+          .attr("y2", (d) => (d.target as Node).y || 0);
 
-        node
+        nodeSelection
           .attr("cx", (d) => d.x || 0)
           .attr("cy", (d) => d.y || 0);
       });
 
-    // Cleanup function to stop the simulation
     return () => {
       simulation.stop();
     };
